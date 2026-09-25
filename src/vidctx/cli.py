@@ -2,6 +2,8 @@
 extract stills, write transcript.md + manifest.json for an LLM to read one still at a time."""
 import argparse
 import json
+import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -9,6 +11,7 @@ from pathlib import Path
 from vidctx import fetch, frames, picks, transcribe
 
 CACHE = Path.home() / ".cache" / "vidctx"
+SKILL_DIR = Path(__file__).parent / "skill"
 # threshold: fraction of pixels that must change vs a recent kept still for a new still to be kept.
 # screen: drop only exact repeats (cursor moves count). lecture: ignore the speaker camera window
 # and compare against the last 3 kept stills (slide -> stage shot -> same slide).
@@ -100,8 +103,33 @@ def build_manifest(kept, seconds, reasons, stills, doc, duration, same_as):
     return entries
 
 
+def install_skill(argv):
+    ap = argparse.ArgumentParser(prog="vidctx install-skill",
+                                 description="Install the video-context skill for Claude Code.")
+    ap.add_argument("--project", action="store_true",
+                    help="install into this repo's .claude/skills/ instead of ~/.claude/skills/ (all projects)")
+    args = ap.parse_args(argv)
+    if args.project:
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+        root = Path(top.stdout.strip()) if top.returncode == 0 else Path.cwd()
+    else:
+        root = Path.home()
+    dest = root / ".claude" / "skills" / "video-context"
+    if dest.is_symlink():
+        sys.exit(f"vidctx: {dest} is a symlink (a dev checkout?); leaving it alone")
+    dest.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(SKILL_DIR / "SKILL.md", dest / "SKILL.md")
+    print(f"installed video-context skill -> {dest}")
+    print("start a new Claude Code session to pick it up" + (", and commit .claude/skills/ to share it"
+                                                            if args.project else ""))
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="vidctx", description=__doc__)
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["install-skill"]:
+        return install_skill(argv[1:])
+    ap = argparse.ArgumentParser(prog="vidctx", description=__doc__,
+                                 epilog="Also: `vidctx install-skill [--project]` installs the Claude Code skill.")
     ap.add_argument("source", help="video file or URL")
     ap.add_argument("--out", type=Path, help="output folder (default ~/.cache/vidctx/runs/<name>)")
     ap.add_argument("--mode", choices=MODES, help="screen (default for files) keeps nearly every still; "

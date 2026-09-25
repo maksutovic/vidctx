@@ -5,13 +5,22 @@ description: Watch a video — a narrated screen recording (.mp4/.mov) or a YouT
 
 # Video context
 
-`vidctx` (a global CLI, source in `~/Developer/side-projects/video-claude-code`) turns a video into
+`vidctx` (a CLI, https://github.com/maksutovic/vidctx) turns a video into
 stills + narration. It transcribes locally (Parakeet on Apple Silicon, ~1 s per minute of video),
 picks frame timestamps from the narration (sentence starts, "this"/"here"/"look at", narrated
 clicks/scrolls, long sentences, silent stretches), extracts 1280-wide JPEGs, and drops stills that
 show the same picture as one already kept.
 
 ## 1. Run it
+
+If `vidctx` isn't on `PATH`, stop and give the user the install line (Apple Silicon Mac; needs
+uv, ffmpeg and deno: `brew install uv ffmpeg deno`):
+
+```bash
+uv tool install git+https://github.com/maksutovic/vidctx
+```
+
+Then:
 
 ```bash
 vidctx "<file-or-url>" --out "<scratchpad>/vidctx/<short-name>"

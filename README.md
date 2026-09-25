@@ -16,18 +16,43 @@ vidctx "https://www.youtube.com/watch?v=1rMgw0Q5MgY"
 
 ## Install
 
-Requires macOS on Apple Silicon, [uv](https://docs.astral.sh/uv/), ffmpeg/ffprobe on `PATH`, and
-deno (for YouTube downloads).
+Requires a Mac with Apple Silicon. Prerequisites, if you don't have them:
+
+```bash
+brew install uv ffmpeg deno
+```
+
+**1. The tool** (puts `vidctx` on your `PATH`):
+
+```bash
+uv tool install git+https://github.com/maksutovic/vidctx
+```
+
+**2. The Claude Code skill**, pick one:
+
+```bash
+vidctx install-skill              # all projects: ~/.claude/skills/video-context
+vidctx install-skill --project    # this repo only: <repo>/.claude/skills/video-context (commit it to share)
+```
+
+Start a new Claude Code session, then ask it to watch a video file or YouTube link. The first run
+downloads the Parakeet model (~2.4 GB, into `~/.cache/huggingface`).
+
+**Update:** `uv tool upgrade vidctx`, then re-run `vidctx install-skill` so the skill matches.
+**Uninstall:** `uv tool uninstall vidctx` and delete the `video-context` skill folder.
+
+### Developing
 
 ```bash
 git clone https://github.com/maksutovic/vidctx && cd vidctx
-uv tool install --editable . --python 3.11      # puts `vidctx` in ~/.local/bin
-ln -s "$PWD/.claude/skills/video-context" ~/.claude/skills/video-context   # skill, all projects
+uv tool install --editable . --python 3.11
+ln -s "$PWD/src/vidctx/skill" ~/.claude/skills/video-context
 ```
 
-`--editable` means code changes apply immediately without reinstalling. Python is pinned to 3.11
-because that's what mlx/parakeet-mlx were verified on. The first run downloads the Parakeet model
-(~2.4 GB, into `~/.cache/huggingface`).
+With `--editable` and the symlink, code and skill changes apply immediately everywhere.
+(`install-skill` refuses to overwrite a symlinked skill folder, so a dev link stays put.) The skill's
+source is `src/vidctx/skill/SKILL.md`, which ships inside the package; `.claude/skills/video-context`
+in this repo is a symlink to it.
 
 ## Usage
 
@@ -101,7 +126,7 @@ A manifest entry:
    15 s.
 7. **Write** `manifest.json` and `transcript.md`.
 
-The skill ([`.claude/skills/video-context/SKILL.md`](.claude/skills/video-context/SKILL.md))
+The skill ([`src/vidctx/skill/SKILL.md`](src/vidctx/skill/SKILL.md))
 runs `vidctx`, reads `transcript.md` for the arc, then reads stills **one per Read call** in time
 order with their `said` text, and ends with a Time | On screen | What was said | What it refers to
 table citing mm:ss. Batching stills into a grid loses the pairing between "this" and the pixel.
@@ -143,7 +168,7 @@ src/vidctx/
   picks.py       timestamp rules (pure functions, unit tested)
   frames.py      ffprobe/ffmpeg helpers, scene detection, dedupe, contact sheet
 tests/           pytest for picks.py
-.claude/skills/video-context/SKILL.md   the Claude Code skill
+src/vidctx/skill/SKILL.md    the Claude Code skill (shipped in the package; .claude/skills/video-context links here)
 docs/            decisions, measurements, original notes
 shootout/        the STT comparison scripts (environments deleted; see docs/stt-shootout.md)
 ```

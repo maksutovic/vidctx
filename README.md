@@ -1,9 +1,9 @@
 # vidctx
 
-Let Claude Code *watch* a video. `vidctx` takes a narrated screen recording or a YouTube
+Let Claude Code or Codex *watch* a video. `vidctx` takes a narrated screen recording or a YouTube
 lecture, transcribes it locally, picks the moments worth looking at from what's being said,
 extracts stills at those moments, and writes a manifest pairing each still with its narration.
-A Claude Code skill (`video-context`) then reads the stills one at a time, each with the words
+An agent skill (`video-context`, for Claude Code and Codex) then reads the stills one at a time, each with the words
 spoken over it, so "click **this**" lines up with what's under the cursor.
 
 Local and free: transcription runs on Apple Silicon with NVIDIA Parakeet (via parakeet-mlx), and
@@ -28,14 +28,26 @@ brew install uv ffmpeg deno
 uv tool install git+https://github.com/maksutovic/vidctx
 ```
 
-**2. The Claude Code skill**, pick one:
+**2. The skill**, pick one:
 
 ```bash
-vidctx install-skill              # all projects: ~/.claude/skills/video-context
-vidctx install-skill --project    # this repo only: <repo>/.claude/skills/video-context (commit it to share)
+vidctx install-skill              # all projects
+vidctx install-skill --project    # this repo only (commit the folder to share it)
 ```
 
-Start a new Claude Code session, then ask it to watch a video file or YouTube link. The first run
+It installs for every agent it finds on the machine; add `--claude` or `--codex` to pick one.
+
+| | All projects | `--project` |
+|---|---|---|
+| Claude Code | `~/.claude/skills/video-context` | `<repo>/.claude/skills/video-context` |
+| Codex | `~/.agents/skills/video-context` | `<repo>/.agents/skills/video-context` |
+
+Start a new session, then ask it to watch a video file or YouTube link.
+
+**Codex note:** Codex's default sandbox blocks network access and writes outside the workspace,
+and vidctx needs both (YouTube downloads, the first-run model download, `~/.cache`). The skill tells
+Codex to request approval to run `vidctx` outside the sandbox. If `~/.cache` isn't writable, vidctx
+falls back to the system temp folder; set `VIDCTX_CACHE` to choose another location. The first run
 downloads the Parakeet model (~2.4 GB, into `~/.cache/huggingface`).
 
 **Update:** `uv tool upgrade vidctx`, then re-run `vidctx install-skill` so the skill matches.
@@ -46,7 +58,8 @@ downloads the Parakeet model (~2.4 GB, into `~/.cache/huggingface`).
 ```bash
 git clone https://github.com/maksutovic/vidctx && cd vidctx
 uv tool install --editable . --python 3.11
-ln -s "$PWD/src/vidctx/skill" ~/.claude/skills/video-context
+ln -s "$PWD/src/vidctx/skill" ~/.claude/skills/video-context   # Claude Code
+ln -s "$PWD/src/vidctx/skill" ~/.agents/skills/video-context   # Codex
 ```
 
 With `--editable` and the symlink, code and skill changes apply immediately everywhere.

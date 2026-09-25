@@ -23,11 +23,16 @@ uv tool install git+https://github.com/maksutovic/vidctx
 Then:
 
 ```bash
-vidctx "<file-or-url>" --out "<scratchpad>/vidctx/<short-name>"
+vidctx "<file-or-url>" --out "<scratch-dir>/vidctx/<short-name>"
 ```
 
-- Use the session scratchpad for `--out`; never write stills into the user's repo. Without `--out`
-  it writes to `~/.cache/vidctx/runs/<name>/`.
+- `--out`: a scratch folder outside the user's repo: the session scratchpad if you have one,
+  otherwise leave `--out` off (it writes to `~/.cache/vidctx/runs/<name>/`, or the system temp
+  folder when that isn't writable). Never write stills into the user's repo.
+- **Sandboxed agents (Codex):** `vidctx` needs network access (YouTube downloads, and the one-time
+  ~2.4 GB model download on first run), writes to `~/.cache`, and uses the Apple GPU. Run it with
+  escalated permissions / outside the sandbox from the start (ask the user to approve) rather than
+  letting it fail inside the sandbox first.
 - Mode is automatic: local files are `screen` (keeps nearly every distinct still), URLs are
   `lecture` (ignores the speaker's camera window, drops repeated slides; filmed footage falls
   back to one still per ~15 s). Override with `--mode screen|lecture`.
@@ -49,8 +54,9 @@ It prints the path to `manifest.json`. The output folder holds:
 ## 2. Read it
 
 1. Read `transcript.md` once to get the overall arc.
-2. Read `manifest.json`, then read the stills **in time order, one image per Read call**, with that
-   entry's `said` text in front of you. Never tile or batch stills into a grid; the point is that
+2. Read `manifest.json`, then view the stills **in time order, one image per tool call** (Claude
+   Code: `Read` on the `frame` path; Codex: `view_image`), with that entry's `said` text in front of
+   you. Never tile or batch stills into a grid; the point is that
    "this" in the narration lines up with what is under the cursor in that exact still.
 3. For each still note: what is on screen (page/slide, section, cursor target, visible text), what
    was said over it, and what it refers to.

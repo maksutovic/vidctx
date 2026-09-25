@@ -3,14 +3,15 @@ extract stills, write transcript.md + manifest.json for an LLM to read one still
 import argparse
 import json
 import shutil
+import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 from vidctx import fetch, frames, picks, transcribe
 
-CACHE = Path.home() / ".cache" / "vidctx"
 SKILL_DIR = Path(__file__).parent / "skill"
 # threshold: fraction of pixels that must change vs a recent kept still for a new still to be kept.
 # screen: drop only exact repeats (cursor moves count). lecture: ignore the speaker camera window
@@ -21,6 +22,33 @@ MODES = {
 }
 # Filmed footage (whole frame always changing) can't be deduped by pixels; space stills out instead.
 CAMERA_SPACING = 15
+
+
+def cache_root():
+    """$VIDCTX_CACHE, else ~/.cache/vidctx, else the system temp dir (sandboxed agents such as
+    Codex can only write to the workspace and temp dirs)."""
+    for root in [os.environ.get("VIDCTX_CACHE"), Path.home() / ".cache" / "vidctx"]:
+        if not root:
+            continue
+        root = Path(root).expanduser()
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+            probe = root / ".write-test"
+            probe.touch()
+            probe.unlink()
+            return root
+        except OSError:
+            continue
+    root = Path(tempfile.gettempdir()) / "vidctx"
+    print(f"vidctx: ~/.cache not writable, using {root}", file=sys.stderr)
+    return root
+
+
+# Where each agent reads skills from: (user-level dir, repo-level dir, how the agent is detected).
+AGENTS = {
+    "claude": (Path.home() / ".claude" / "skills", Path(".claude") / "skills", Path.home() / ".claude"),
+    "codex": (Path.home() / ".agents" / "skills", Path(".agents") / "skills", Path.home() / ".codex"),
+}
 
 
 def mmss(t):
@@ -104,24 +132,34 @@ def build_manifest(kept, seconds, reasons, stills, doc, duration, same_as):
 
 
 def install_skill(argv):
-    ap = argparse.ArgumentParser(prog="vidctx install-skill",
-                                 description="Install the video-context skill for Claude Code.")
+    ap = argparse.ArgumentParser(
+        prog="vidctx install-skill",
+        description="Install the video-context skill for Claude Code (~/.claude/skills) and/or Codex "
+                    "(~/.agents/skills). Default: every agent found on this machine.")
     ap.add_argument("--project", action="store_true",
-                    help="install into this repo's .claude/skills/ instead of ~/.claude/skills/ (all projects)")
+                    help="install into this repo (.claude/skills, .agents/skills) instead of your home folder")
+    ap.add_argument("--claude", action="store_true", help="only Claude Code")
+    ap.add_argument("--codex", action="store_true", help="only Codex")
     args = ap.parse_args(argv)
+
+    chosen = [a for a in AGENTS if getattr(args, a)]
+    if not chosen:
+        chosen = [a for a, (_, _, marker) in AGENTS.items() if marker.exists()] or ["claude"]
     if args.project:
         top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
-        root = Path(top.stdout.strip()) if top.returncode == 0 else Path.cwd()
-    else:
-        root = Path.home()
-    dest = root / ".claude" / "skills" / "video-context"
-    if dest.is_symlink():
-        sys.exit(f"vidctx: {dest} is a symlink (a dev checkout?); leaving it alone")
-    dest.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(SKILL_DIR / "SKILL.md", dest / "SKILL.md")
-    print(f"installed video-context skill -> {dest}")
-    print("start a new Claude Code session to pick it up" + (", and commit .claude/skills/ to share it"
-                                                            if args.project else ""))
+        repo = Path(top.stdout.strip()) if top.returncode == 0 else Path.cwd()
+
+    for agent in chosen:
+        user_dir, repo_dir, _ = AGENTS[agent]
+        dest = (repo / repo_dir if args.project else user_dir) / "video-context"
+        if dest.is_symlink():
+            print(f"{agent}: {dest} is a symlink (a dev checkout?); leaving it alone")
+            continue
+        dest.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SKILL_DIR / "SKILL.md", dest / "SKILL.md")
+        print(f"{agent}: installed video-context skill -> {dest}")
+    print("start a new session to pick it up" + (", and commit the skill folder(s) to share them"
+                                                  if args.project else ""))
 
 
 def main(argv=None):
@@ -129,7 +167,7 @@ def main(argv=None):
     if argv[:1] == ["install-skill"]:
         return install_skill(argv[1:])
     ap = argparse.ArgumentParser(prog="vidctx", description=__doc__,
-                                 epilog="Also: `vidctx install-skill [--project]` installs the Claude Code skill.")
+                                 epilog="Also: `vidctx install-skill [--project] [--claude|--codex]` installs the agent skill.")
     ap.add_argument("source", help="video file or URL")
     ap.add_argument("--out", type=Path, help="output folder (default ~/.cache/vidctx/runs/<name>)")
     ap.add_argument("--mode", choices=MODES, help="screen (default for files) keeps nearly every still; "
@@ -143,9 +181,10 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     t0 = time.time()
+    cache = cache_root()
     if fetch.is_url(args.source):
         print(f"downloading {args.source} ...", file=sys.stderr)
-        video, meta = fetch.download(args.source, CACHE / "downloads")
+        video, meta = fetch.download(args.source, cache / "downloads")
         name = meta["id"]
     else:
         video = Path(args.source).expanduser().resolve()
@@ -154,7 +193,7 @@ def main(argv=None):
         meta = {"source": str(video)}
         name = video.stem
     mode = args.mode or ("lecture" if fetch.is_url(args.source) else "screen")
-    out = (args.out or CACHE / "runs" / name).expanduser().resolve()
+    out = (args.out or cache / "runs" / name).expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
 
     info = frames.probe(video)
